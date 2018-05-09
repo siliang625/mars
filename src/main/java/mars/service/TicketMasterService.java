@@ -21,7 +21,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import mars.algorithm.GeoRecommendation;
 import mars.common.GeoHash;
+import mars.dao.AbstractDao;
 import mars.entity.HistoryItem;
 import mars.entity.Item;
 import mars.entity.Item.ItemBuilder;
@@ -33,8 +35,14 @@ public class TicketMasterService extends AbstractGenericService<Item> {
 	@Qualifier("restTemplate")
 	private RestTemplate restTemplate;
 
+	@Autowired
+	private AbstractDao dao;
+	
+	@Autowired
+	private GeoRecommendation recommendation;
+
 	private static String URL = "https://app.ticketmaster.com/discovery/v2/events.json";
-	private static String API_KEY = "ZGy09WcAobvOmOQRUFsLFAwcD6QIIpCZ";
+	private static String API_KEY = "8bmyZF2f8x21thNOAJkAXjPb60ovr7vR";
 	private static int PRECISION = 8;
 
 	public List<Item> search(double latitude, double longitude, String term) {
@@ -67,20 +75,29 @@ public class TicketMasterService extends AbstractGenericService<Item> {
 		List<Item> items = getItemList(events);
 
 		for (Item item : items) {
-        // TODO: update DB 
+			try {
+				dao.saveItem(item);
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
 		}
 		return items;
 	}
 
 	public Set<Item> getUserFavorites(String userId) {
-		return null;
+		return dao.getFavoriteItems(userId);
 	}
 
 	public void setUserFavorites(HistoryItem historyItem) {
-
+		dao.setFavoriteItems(historyItem.getUser_id(),          historyItem.getFavorite());
 	}
 
 	public void deleteUserFavorites(HistoryItem historyItem) {
+		dao.unsetFavoriteItems(historyItem.getUser_id(), historyItem.getFavorite());
+	}
+
+	public List<Item> getUserRecommendation(String userId, double lat, double lon) {
+		return recommendation.recommendItems(userId, lat, lon);
 	}
 
 	private JSONObject getVenue(JSONObject event) throws JSONException {
@@ -168,6 +185,7 @@ public class TicketMasterService extends AbstractGenericService<Item> {
 						sb.append(address.getString("line2"));
 					}
 					if (!address.isNull("line3")) {
+						sb.append(address.getString("line3"));
 					}
 					sb.append(",");
 				}
